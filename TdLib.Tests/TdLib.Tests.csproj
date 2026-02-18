@@ -16,6 +16,7 @@ SPDX-License-Identifier: MIT
 
     <ItemGroup>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="2.1.0" />
         <PackageReference Include="tdlib.native" Version="1.8.45" />
         <PackageReference Include="xunit" Version="2.9.3" />
         <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2" />
@@ -23,6 +24,7 @@ SPDX-License-Identifier: MIT
 
     <ItemGroup>
       <ProjectReference Include="..\TdLib\TdLib.csproj" />
+      <ProjectReference Include="..\TdLib.Extensions\TdLib.Extensions.csproj" />
     </ItemGroup>
 
 </Project>

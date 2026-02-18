@@ -1,0 +1,31 @@
+<!--
+SPDX-FileCopyrightText: 2024 tdsharp contributors <https://github.com/egramtel/tdsharp>
+
+SPDX-License-Identifier: MIT
+-->
+
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <PackageId>TDLib.Extensions</PackageId>
+        <RootNamespace>TdLib.Extensions</RootNamespace>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>
+            CS1591 <!-- Missing XML comment for publicly visible type or member -->
+        </NoWarn>
+        <PackageTags>telegram;logging;ilogger</PackageTags>
+        <Description>
+            .NET extensions for TDLib (Telegram Database Library): https://github.com/tdlib/td
+
+            This package provides Microsoft.Extensions.Logging integration for TDLib.
+        </Description>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="ChangelogAutomation.MSBuild" Version="2.0.0" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="2.1.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\TdLib\TdLib.csproj" />
+    </ItemGroup>
+</Project>
