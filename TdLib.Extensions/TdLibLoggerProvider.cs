@@ -72,9 +72,14 @@ namespace TdLib.Extensions
                     Text = fullMessage
                 });
             }
-            catch
+            catch (ObjectDisposedException)
             {
-                // Swallow exceptions to prevent logging failures from crashing the application
+                // Client has been disposed, silently ignore
+            }
+            catch (Exception ex)
+            {
+                // Log to debug output to aid diagnostics without crashing the application
+                System.Diagnostics.Debug.WriteLine($"Error writing log message to TDLib: {ex.Message}");
             }
         }
 

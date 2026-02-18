@@ -17,18 +17,39 @@ namespace TdLib.Extensions
     public delegate void LogMessageCallback(int verbosityLevel, string message);
 
     /// <summary>
-    /// Provides extension methods for integrating TDLib logging with Microsoft.Extensions.Logging
+    /// Provides extension methods for integrating TDLib logging with Microsoft.Extensions.Logging.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Thread Safety:</b> The UseTdLibLogging methods are not thread-safe.
+    /// They should be called once during application initialization before using the TdClient.
+    /// </para>
+    /// <para>
+    /// <b>Multi-Client Scenarios:</b> TDLib uses a global fatal error callback, so only one
+    /// logger can be configured for fatal errors at a time. If you need different loggers
+    /// for different TdClient instances, use the <see cref="TdLibLoggerProvider"/> instead
+    /// for application-to-TDLib logging.
+    /// </para>
+    /// </remarks>
     public static class TdLoggerExtensions
     {
+        private static readonly object _lock = new object();
         private static ILogger _logger;
         private static Callback _nativeCallback;
 
         /// <summary>
         /// Configures TDLib to use the specified ILogger for logging fatal errors.
-        /// Note: TDLib native bindings only support fatal error callbacks by default.
-        /// For full logging integration, use UseTdLibLogging with log file monitoring.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This method is not thread-safe and should be called once during application initialization.
+        /// </para>
+        /// <para>
+        /// TDLib native bindings only support a global fatal error callback.
+        /// For full logging integration where TDLib logs are routed to ILogger, consider
+        /// using a file-based log stream and monitoring the log file.
+        /// </para>
+        /// </remarks>
         /// <param name="client">The TdClient instance</param>
         /// <param name="logger">The ILogger to use for logging</param>
         /// <param name="logLevel">The TDLib log level to set</param>
@@ -39,14 +60,18 @@ namespace TdLib.Extensions
             if (logger == null)
                 throw new ArgumentNullException(nameof(logger));
 
-            _logger = logger;
+            lock (_lock)
+            {
+                _logger = logger;
 
-            // Set the verbosity level
-            client.Bindings.SetLogVerbosityLevel(logLevel);
+                // Set the verbosity level
+                client.Bindings.SetLogVerbosityLevel(logLevel);
 
-            // Set up the fatal error callback to route to ILogger
-            _nativeCallback = OnFatalError;
-            client.Bindings.SetLogFatalErrorCallback(_nativeCallback);
+                // Set up the fatal error callback to route to ILogger
+                // Keep a reference to prevent garbage collection
+                _nativeCallback = OnFatalError;
+                client.Bindings.SetLogFatalErrorCallback(_nativeCallback);
+            }
         }
 
         /// <summary>
@@ -73,24 +98,37 @@ namespace TdLib.Extensions
 
         private static void OnFatalError(IntPtr messagePtr)
         {
-            if (_logger == null || messagePtr == IntPtr.Zero)
+            ILogger currentLogger;
+            lock (_lock)
+            {
+                currentLogger = _logger;
+            }
+
+            if (currentLogger == null || messagePtr == IntPtr.Zero)
                 return;
 
             try
             {
                 var message = Marshal.PtrToStringAnsi(messagePtr);
-                _logger.LogCritical("[TDLib Fatal] {Message}", message);
+                currentLogger.LogCritical("[TDLib Fatal] {Message}", message);
             }
             catch (Exception ex)
             {
                 // Swallow exceptions in callback to prevent native crashes
+                // Use Debug.WriteLine for diagnostics as we cannot use the logger here
                 System.Diagnostics.Debug.WriteLine($"Error in TDLib fatal error callback: {ex}");
             }
         }
 
         /// <summary>
-        /// Maps TDLib verbosity level to Microsoft.Extensions.Logging LogLevel
+        /// Maps TDLib verbosity level to Microsoft.Extensions.Logging LogLevel.
         /// </summary>
+        /// <remarks>
+        /// Both <see cref="TdLogLevel.Verbose"/> and <see cref="TdLogLevel.All"/> map to
+        /// <see cref="LogLevel.Trace"/> because .NET's LogLevel has fewer granularity levels
+        /// than TDLib's verbosity system. TDLib's All (1024) represents maximum verbosity,
+        /// which semantically aligns with Trace in the .NET logging hierarchy.
+        /// </remarks>
         /// <param name="tdLogLevel">TDLib verbosity level (0-5+)</param>
         /// <returns>Corresponding Microsoft.Extensions.Logging LogLevel</returns>
         public static LogLevel ToLogLevel(this TdLogLevel tdLogLevel)
@@ -108,7 +146,10 @@ namespace TdLib.Extensions
                 case TdLogLevel.Debug:
                     return LogLevel.Debug;
                 case TdLogLevel.Verbose:
+                    // Verbose maps to Trace - highest verbosity in .NET
+                    return LogLevel.Trace;
                 case TdLogLevel.All:
+                    // All (1024) is TDLib's maximum verbosity, also maps to Trace
                     return LogLevel.Trace;
                 default:
                     return LogLevel.Information;
@@ -132,6 +173,7 @@ namespace TdLib.Extensions
                 return LogLevel.Information;
             if (verbosityLevel == 4)
                 return LogLevel.Debug;
+            // Levels 5+ (including 1024 for All) map to Trace
             return LogLevel.Trace;
         }
 
