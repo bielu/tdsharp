@@ -150,6 +150,7 @@ let generateFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
                                    Utils.toCamelCase field.FieldName Utils.LowerCase))
         |> List.map (fun (t, n) -> sprintf "%s %s = default" t n)
         |> String.concat ", "
+
     let funcArgs =
         fields
         |> List.map (fun field -> (Utils.toCamelCase field.FieldName Utils.UpperCase,
@@ -169,7 +170,58 @@ let generateFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
             .Replace("$FUNC_PARAMS", funcParams)
             .Replace("$FUNC_ARGS", funcArgs))
         |> String.concat "\n"
+let generateOtelFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
+    let (funcTypeName, fields, returnTypeName) =
+        match def with
+        | Parser.TlFuncDef (funcDef, fields, returnDef) -> (getDotNetType funcDef, fields, getDotNetType returnDef)
+        | _ -> failwith "Generating functions only supported for func definitions"
+    let tlFuncTypeName = Utils.toCamelCase funcTypeName Utils.LowerCase
+    let description =
+        match getTypeAnnotationText annotations with
+        | Some(text) -> text
+        | None -> ""
 
+    let funcFields =
+        fields
+        |> List.map (fun field -> generateField def field annotations 12)
+        |> String.concat "\n\n"
+
+    let funcParams =
+        fields
+        |> List.map (fun field -> (getDotNetType field.TypeName,
+                                   Utils.toCamelCase field.FieldName Utils.LowerCase))
+        |> List.map (fun (t, n) -> sprintf "%s %s = default" t n)
+        |> List.fold (fun acc a -> acc + ", " + a) ""
+    let funcParamsPartials =
+        fields
+        |> List.map (fun field -> (getDotNetType field.TypeName,
+                                   Utils.toCamelCase field.FieldName Utils.LowerCase))
+        |> List.map (fun (t, n) -> sprintf "%s %s = default" t n)
+        |> String.concat ", "
+    let funcArgs =
+        fields
+        |> List.map (fun field -> (Utils.toCamelCase field.FieldName Utils.UpperCase,
+                                   Utils.toCamelCase field.FieldName Utils.LowerCase))
+        |> List.map (fun (f, a) -> sprintf "%s = %s" f a)
+        |> fun arr -> String.Join(", ", arr)
+    let funcParamsValues =
+        fields
+        |> List.map (fun field -> (getDotNetType field.TypeName,
+                                   Utils.toCamelCase field.FieldName Utils.LowerCase))
+        |> List.map (fun (t, n) -> $"%s{n}")
+        |> String.concat ", "
+    let lines = Utils.readResource "OtelFunction.tpl"
+    lines |> Seq.map (fun line ->
+        (withDescription line "$FUNC_DESCRIPTION" 0 (Utils.xmlEncode description))
+            .Replace("$FUNC_NAME", funcTypeName)
+
+            .Replace("$TL_FUNC_NAME", tlFuncTypeName)
+            .Replace("$RETURN_TYPE_NAME", returnTypeName)
+            .Replace("$FUNC_FIELDS", funcFields)
+            .Replace("$FUNC_PARAMS_PARTIALS", funcParamsPartials)
+            .Replace("$FUNC_PARAMS_VALUES", funcParamsValues)
+            .Replace("$FUNC_ARGS", funcArgs))
+        |> String.concat "\n"
 let private isBasicDef(line: string) =
     // Skip the beginning of Types.tl
     line.StartsWith("double ? =")
@@ -262,7 +314,31 @@ let generateAllFuncs() = seq {
             ()
             annotations <- []
 }
+let generateAllOtelFuncs() = seq {
+    let lines = Utils.readResource "Methods.tl" |> splitIntoChunks
 
+    let mutable annotations = []
+
+    for line in lines do
+        if String.IsNullOrWhiteSpace(line) then
+            ()
+        elif line.StartsWith("//") then
+            match run Parser.parseAnnotationList <| processCommentBlock line with
+            | Success(result, _, _) -> annotations <- annotations @ result
+            | _ -> ()
+        else
+            match run Parser.parseFuncDef line with
+            | Success(def, _, _) ->
+                match def with
+                | Parser.TlFuncDef(definedFunc, _, _) ->
+                    let funcName = getDotNetType definedFunc
+                    let source = generateOtelFunc def annotations
+                    yield (funcName, source)
+                | _ -> ()
+            | Failure(err, _, _) -> failwith (sprintf "Could not parse \"%s\". Error: %s" line err)
+            ()
+            annotations <- []
+}
 [<Fact>]
 let ``splitIntoChunks should work properly``(): unit =
     let input = [| "foo"; "bar"; "//@test"; "//-test2"; "foo"; "//-test"; "//-test2" |]

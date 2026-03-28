@@ -19,4 +19,6 @@ let main _ =
     for name, source in Generator.generateAllFuncs() do
         writeFile "Functions" (name + ".cs") source
 
+    for name, source in Generator.generateAllOtelFuncs() do
+        writeFile "..\TdLib.Api.OpenTelemetry\OtelFunctions" (name + ".cs") source
     0

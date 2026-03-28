@@ -22,6 +22,7 @@ SPDX-License-Identifier: MIT
         <EmbeddedResource Include="Types.tl" />
         <EmbeddedResource Include="Methods.tl" />
         <EmbeddedResource Include="Function.tpl" />
+        <EmbeddedResource Include="OtelFunction.tpl" />
         <EmbeddedResource Include="Object.tpl" />
         <EmbeddedResource Include="Field.tpl" />
         <Compile Include="Program.fs" />
