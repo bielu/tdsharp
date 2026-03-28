@@ -4,9 +4,18 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using TdLib.Api.OpenTelemetry;
 using TdLib.Bindings;
 using TdLib.TdApi;
 using TdLib.TdApi.Objects;
@@ -22,17 +31,21 @@ internal static class Program
     private const string PhoneNumber = "";
     private const string ApplicationVersion = "1.0.0";
 
-    private static TdClient _client;
+    private static IClient _client;
     private static readonly ManualResetEventSlim ReadyToAuthenticate = new();
 
     private static bool _authNeeded;
     private static bool _passwordNeeded;
 
-    private static async Task Main()
+    public  static async Task Main(string[] args)
     {
+        var host = CreateHostBuilder(args).Build();
+        var activitySource =host.Services.GetKeyedService<ActivitySource>(TdClientActivitySource.ActivitySourceName);
         // Creating Telegram client and setting minimal verbosity to Fatal since we don't need a lot of logs :)
-        _client = new TdClient();
-        _client.Bindings.SetLogVerbosityLevel(TdLogLevel.Fatal);
+        var client = new TdClient();
+        client.Bindings.SetLogVerbosityLevel(TdLogLevel.Fatal);
+
+        _client = client.UseOpenTelemetry(activitySource);
 
         // Subscribing to all events
         _client.UpdateReceived += async (_, update) => { await ProcessUpdates(update); };
@@ -176,4 +189,35 @@ internal static class Program
             }
         }
     }
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.SetMinimumLevel(LogLevel.Trace);
+                logging.AddOpenTelemetry(options =>
+                {
+                    options
+                        .SetResourceBuilder(
+                            ResourceBuilder.CreateDefault()
+                                .AddService("TdLibSampleApp"))
+                        .AddConsoleExporter();
+                });
+            })
+            .ConfigureServices((hostContext, services) =>
+            {
+                // remove the hosted service
+                // services.AddHostedService<Worker>();
+
+                services.AddOpenTelemetry()
+                    .ConfigureResource(resource => resource.AddService("TdLibSampleApp"))
+                    .WithTracing(tracing => tracing
+                        .AddAspNetCoreInstrumentation()
+                        .AddTdSharpInstrumentation()
+                        .AddConsoleExporter())
+                    .WithMetrics(metrics => metrics
+                        .AddAspNetCoreInstrumentation()
+                        .AddConsoleExporter());
+                // register your services here.
+            });
 }
