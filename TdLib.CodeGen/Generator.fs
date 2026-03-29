@@ -6,6 +6,8 @@ module TdLib.CodeGen.Generator
 
 open System
 
+open System.Linq
+open System.Text.RegularExpressions
 open FParsec
 open Xunit
 
@@ -122,12 +124,13 @@ let generateType (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
             .Replace("$TYPE_FIELDS", objectFields))
         |> String.concat "\n"
 
-let generateFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
+let generateFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list)  (clientName: string) =
     let (funcTypeName, fields, returnTypeName) =
         match def with
         | Parser.TlFuncDef (funcDef, fields, returnDef) -> (getDotNetType funcDef, fields, getDotNetType returnDef)
         | _ -> failwith "Generating functions only supported for func definitions"
     let tlFuncTypeName = Utils.toCamelCase funcTypeName Utils.LowerCase
+
     let description =
         match getTypeAnnotationText annotations with
         | Some(text) -> text
@@ -160,6 +163,8 @@ let generateFunc (def: Parser.TlDef) (annotations: Parser.TlAnnotation list) =
     let lines = Utils.readResource "Function.tpl"
     lines |> Seq.map (fun line ->
         (withDescription line "$FUNC_DESCRIPTION" 0 (Utils.xmlEncode description))
+            .Replace("$CLIENT_NAME", clientName)
+
             .Replace("$FUNC_NAME", funcTypeName)
 
             .Replace("$TL_FUNC_NAME", tlFuncTypeName)
@@ -255,8 +260,13 @@ let generateAllFuncs() = seq {
                 match def with
                 | Parser.TlFuncDef(definedFunc, _, _) ->
                     let funcName = getDotNetType definedFunc
-                    let source = generateFunc def annotations
-                    yield (funcName, source)
+                    let wordsToRemove = [| "add"; "get"; "set";  "edit"; "remove";  "delete";  "update";  "create";  "search";  "start"; "end";"enable";"report";"send";"toggle";"transfer";"translate";"view";"write" ;"all";"accept";"active";"answer";"archive";"missing";"craft";"custom";"Default";"disable";"disconnect";"answer"|]
+                    let clientName =
+                        Regex.Split(funcName, @"(?<!^)(?=[A-Z])")
+                        |> Seq.filter (fun word -> not (wordsToRemove.Contains(word.ToLower())))
+                        |> String.concat ""
+                    let source = generateFunc def annotations clientName
+                    yield (clientName,funcName, source)
                 | _ -> ()
             | Failure(err, _, _) -> failwith (sprintf "Could not parse \"%s\". Error: %s" line err)
             ()

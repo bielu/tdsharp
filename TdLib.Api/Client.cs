@@ -13,15 +13,8 @@ namespace TdLib.TdApi;
 /// </summary>
 public abstract partial class Client : Object, IClient
 {
-    public static partial class TdApi
-    {
-        /// <summary>
-        /// Base class for API client
-        /// </summary>
-        public abstract partial class Client : Object,IClient
-        {
-            public abstract event EventHandler<TdApi.Update> UpdateReceived;
-            public abstract void Send<TResut>(Function<TResut> function);
+    public abstract event EventHandler<Update> UpdateReceived;
+    public abstract void Send<TResut>(Function<TResut> function);
 
     public abstract TResult Execute<TResult>(Function<TResult> function)
         where TResult : Object;
@@ -29,6 +22,7 @@ public abstract partial class Client : Object, IClient
     public abstract Task<TResult> ExecuteAsync<TResult>(Function<TResult> function)
         where TResult : Object;
 }
+
 public partial interface IClient
 {
     public event EventHandler<Update> UpdateReceived;
@@ -39,4 +33,21 @@ public partial interface IClient
 
     public Task<TResult> ExecuteAsync<TResult>(Function<TResult> function)
         where TResult : Object;
+}
+
+public class BaseClient
+{
+    private IClient _client;
+
+    public void Initialise(IClient client)
+    {
+        _client = client;
+    }
+    protected void Send<TResut>(Function<TResut> function) =>_client.Send(function);
+
+    protected TResult Execute<TResult>(Function<TResult> function)
+        where TResult : Object => _client.Execute(function);
+
+    protected Task<TResult> ExecuteAsync<TResult>(Function<TResult> function)
+        where TResult : Object => _client.ExecuteAsync(function);
 }

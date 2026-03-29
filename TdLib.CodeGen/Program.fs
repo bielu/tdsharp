@@ -8,15 +8,17 @@ open System.IO
 
 [<EntryPoint>]
 let main _ =
-    let writeFile folder name (source: string) =
+    let writeFile folder clientFolder name (source: string) =
         if not (Directory.Exists(folder)) then
             Directory.CreateDirectory(folder) |> ignore
-        File.WriteAllText(folder + "/" + name, source)
+        if not (Directory.Exists(folder+"/"+clientFolder)) then
+            Directory.CreateDirectory(folder+"/"+clientFolder) |> ignore
+        File.WriteAllText(folder+"/"+clientFolder + "/" + name, source)
 
     for name, source in Generator.generateAllTypes() do
         writeFile "Objects" (name + ".cs") source
 
-    for name, source in Generator.generateAllFuncs() do
-        writeFile "Functions" (name + ".cs") source
+    for clientName, name, source in Generator.generateAllFuncs() do
+        writeFile "Functions" clientName (name + ".cs") source
 
     0

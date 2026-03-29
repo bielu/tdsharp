@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 using System.Threading.Tasks;
+using TdLib.TdApi;
 using TdLib.TdApi.Objects;
 using Xunit;
 
@@ -13,8 +14,10 @@ namespace TdLib.Tests
         [Fact]
         public async Task Execute_WhenErrorExpected_ThrowsTdException()
         {
-            using (var client = new TdClient())
+            using (var tdCLient = new TdClient())
             {
+                var client = new TestReturnErrorClient();
+                client.Initialise(tdCLient);
                 TdException exception = null;
 
                 try
