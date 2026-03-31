@@ -17,7 +17,7 @@ namespace TdLib
     /// </summary>
     public class TdClient : TdApi.Client, IDisposable
     {
-        private TdJsonClient _tdJsonClient;
+        private ITdJsonClient _tdJsonClient;
 
         private int _taskId;
         private readonly ConcurrentDictionary<int, Action<TdApi.Object>> _tasks;
@@ -34,13 +34,18 @@ namespace TdLib
 
         /// <param name="bindings">Bidings for the client to call functions of TDLib.</param>
         /// <param name="receiverTimeOut">Timeout for <c>td_json_client_receive</c>.</param>
-        public TdClient(ITdLibBindings bindings, TimeSpan receiverTimeOut)
+        public TdClient(ITdLibBindings bindings, TimeSpan receiverTimeOut) : this(new Receiver(new TdJsonClient(bindings), receiverTimeOut))
         {
-            _tdJsonClient = new TdJsonClient(bindings);
 
+        }
+        /// <param name="receiver">
+        /// An implementation of <see cref="IReceiver"/> that manages receiving and processing
+        /// updates and responses from TDLib.
+        /// </param>
+        public TdClient(IReceiver receiver)
+        {
             _tasks = new ConcurrentDictionary<int, Action<TdApi.Object>>();
-
-            _receiver = new Receiver(_tdJsonClient,receiverTimeOut);
+            _receiver = receiver;
             _receiver.Received += OnReceived;
             _receiver.AuthorizationStateChanged += OnAuthorizationStateChanged;
             _receiver.Start();
